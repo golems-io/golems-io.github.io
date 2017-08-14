@@ -46,7 +46,8 @@ var app = angular.module('golems', ['ngRoute', 'api'])
   });
 
 app.controller('CardController', function Card($scope, $location, Schema, Person) {
-  $scope.debug = true; // "debug" in $location.search();
+  $scope.debug = ("debug" in $location.search());
+  console.log("$scope.debug =", $scope.debug);
   $scope.schema = Schema.get({ aspect: "person" });
   $scope.golem = Person.get({ spore: "random" });
 });

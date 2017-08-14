@@ -4,8 +4,14 @@
     <title>golems.io</title>
     <script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.1/jquery.min.js"></script>
 
-    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/shoelace-css/1.0.0-beta15/shoelace.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/shoelace-css/1.0.0-beta15/shoelace.js"></script>
+
+    <link rel="stylesheet" type="text/css" href="http://fonts.googleapis.com/css?family=Podkova:400,700">
+    <style>h1 { font-size: 64px; font-family: Podkova; }</style>
+
+    <!-- link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script -->
 
     <script src="//ajax.googleapis.com/ajax/libs/angularjs/1.6.5/angular.min.js"></script>
     <script src="//ajax.googleapis.com/ajax/libs/angularjs/1.6.5/angular-route.min.js"></script>
@@ -30,9 +36,7 @@
     </style>
   </head>
   <body>
-    <div class="container-fluid">
-      <h2><a href="#/">golems.io</a></h2>
-      <div class="well" ng-view></div>
-    </div>
+    <h1>golems.io</h1>
+    <div ng-view></div>
   </body>
 </html>

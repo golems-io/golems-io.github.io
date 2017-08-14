@@ -3,14 +3,10 @@
     <tr ng-repeat="(key, value) in golem">
       <th>{{ key | title }}</th>
       <td style="white-space: pre; max-width: 20em; overflow: hidden"><code id="{{ key }}">{{ value }}</code></td>
-      <td><button class="btn btn-xs" data-clipboard-text="{{ value }}">copy</button></td>
+      <!-- TODO td><button class="button-small button-secondary" data-clipboard-text="{{ value }}">copy</button></td -->
       <td><small>{{ schema[key].description }}</small></td>
     </tr>
   </tbody>
 </table>
-<pre ng-show="debug">
-{{ golem | json }}
-</pre>
-<pre ng-show="debug">
-{{ schema | json }}
-</pre>
+<pre ng-show="debug">{{ golem | json }}</pre>
+<pre ng-show="debug">{{ schema | json }}</pre>
