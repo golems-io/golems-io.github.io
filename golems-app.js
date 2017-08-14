@@ -1,9 +1,22 @@
-angular.module('golems', ['api', 'ngCsv', 'ngCookies']).
-  config(function($routeProvider) {
+// TODO: switch to api.golems.io if/when can enable SNI SSL on heroku (requires paid dynos) or switch to lambda or whatever
+var api = angular.module('api', ['ngResource'])
+  .factory('Schema', function($resource) {
+      var Schema = $resource('//golems.herokuapp.com/schema/:aspect');
+      return Schema;
+  })
+  .factory('Person', function($resource) {
+      var Person = $resource('//golems.herokuapp.com/person/:spore');
+      return Person;
+  })
+;
+
+var app = angular.module('golems', ['ngRoute', 'api'])
+  .config(['$routeProvider', function($routeProvider) {
     $routeProvider.
-      when('/', { controller: Card, templateUrl: 'card.html' }).
+      when('/', { controller: "CardController", templateUrl: 'card.html' }).
       otherwise({redirectTo:'/'});
-  }).filter('fromNow', function() {
+  }])
+  .filter('fromNow', function() {
     return function(maybeDate) {
       if (typeof(maybeDate) === "string" && maybeDate.match(/^20[12][0-9]-.*Z$/)) {
         var d = Date.parse(maybeDate);
@@ -32,8 +45,8 @@ angular.module('golems', ['api', 'ngCsv', 'ngCookies']).
     delete $httpProvider.defaults.headers.common['X-Requested-With']; // borks CORS 
   });
 
-function Card($scope, $location, Schema, Person) {
+app.controller('CardController', function Card($scope, $location, Schema, Person) {
   $scope.debug = true; // "debug" in $location.search();
   $scope.schema = Schema.get({ aspect: "person" });
   $scope.golem = Person.get({ spore: "random" });
-}
+});
