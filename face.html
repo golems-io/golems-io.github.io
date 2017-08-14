@@ -1,0 +1,696 @@
+<!doctype html>
+<html>
+  <head>
+    <title>golems.io</title>
+    <script src="https://code.jquery.com/jquery-2.1.3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/rivets/0.8.0/rivets.bundled.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.5/d3.min.js"></script>
+
+    <style type="text/css">
+
+     button { float: left; clear: left; }
+     input[type="checkbox"] { float: left; clear: left; }
+     label { float: left; }
+
+     label.active { color: red; }
+
+      #canvas.background > svg {
+        background-image: url("face-frontal-small.jpg");
+        background-repeat: no-repeat;
+        background-position-x: 0;
+        background-position-y: 0;
+      }
+
+      svg .measure {
+        stroke-width: 3;
+        stroke: gray;
+        opacity: .25;
+        fill: white;
+      }
+
+      svg .measure.selected {
+        opacity: .75;
+        stroke: red;
+      }
+      svg .measure.selected .active {
+        fill: red;
+      }
+
+      svg circle { opacity: 1.0 }
+      svg line.crosshairs { opacity: .25 }
+      svg .crosshairs text { font-family: sans-serif; font-size: 8px; }
+      svg path.outline { opacity: .5 }
+      svg path { opacity: 0.5 }
+
+      div#canvas { float: left; }
+
+      #coords { display: block; position: absolute; top: 0; right: 0; }
+
+    </style>
+  </head>
+  <body>
+    <div id="canvas" class="background"></div>
+    <form id="coords" action="#">
+      <input type="text" id="raw_x"></input><input type="text" id="raw_y"></input><br/>
+      <input type="text" id="face_x"></input><input type="text" id="face_y"></input><br/>
+      <input type="text" id="pct_x"></input><input type="text" id="pct_y"></input><br/>
+      <button onclick="toggleBackground(); return false;">Toggle Background</button>
+      <input type="checkbox" name="crosshairs" checked><label for="crosshairs">Crosshairs</label>
+    </form>
+    <!-- textarea id="json"></textarea -->
+    <script>
+// <![CDATA[
+
+function toggleBackground() { $('#canvas').toggleClass("background"); }
+$('input[name="crosshairs"]').change(function () {
+    console.log(this);
+    d3.selectAll('.crosshairs').style('visibility', $(this).is(':checked') ? 'visible' : 'hidden');
+});
+
+/* Landmarks
+ *       Right Tragion (t_r): Point marking the notch at the superior margin of the tragus, where the cartilage meets the skin of the face.
+ *        Left Tragion (t_l): Same as above.
+ * Right Endocanthion (en_r): Apex of the angle formed at the inner corner of the palpebral fissure where the upper and lower eyelids meet.
+ *  Left Endocanthion (en_l): Same as above.
+ *  Right Exocanthion (ex_r): Apex of the angle formed at the outer corner of the palpebral fissure where the upper and lower eyelids meet.
+ *   Left Exocanthion (ex_l): Same as above.
+
+Stomion (sto): Midpoint of the labial fissure.
+ Labiale Superior (ls): Midline point of the vermilion border of the upper lip, at the base of the philtrum.
+Labiale Inferius (li): Midline point of the vermilion border of the lower lip.
+Right Christa Philtri (cph_r): Point marking the lateral crest of the philtrum at the vermilion border of the upper lip.
+Left Christa Philtri (cph_l): Same as above.
+
+Right Alare (al_r): Most lateral point on the nasal ala.
+Left Alare (al_l): Same as above.
+Right Subalare (sbal_r): Point located at the lower margin of the nasal ala, where the cartilage insterts in the cutaneous upper lip.
+Left Subalare (sbal_l): Same as above.
+
+Right Euryon (eu_r): The most lateral point on the parietal region of the head.
+Left Euryon (eu_l): Same as above.
+
+Right Gonion (go_r): The most lateral point at the gonial/mandibular angle.
+Left Gonion (go_l): Same as above.
+
+(not in face base)
+vertex (v): top center of cranium
+ */
+
+function Point(x, y) {
+  this.x = x;
+  this.y = y;
+  this.X = function (offset) { if (typeof(offset) === 'undefined') { return this.x; } else { return function () { return this.x + offset; }.bind(this); } }.bind(this);
+  this.Y = function (offset) { if (typeof(offset) === 'undefined') { return this.y; } else { return function () { return this.y + offset; }.bind(this); } }.bind(this);
+}
+
+function P(x,y) { return new Point(x, y); }
+function X(o) { return o.x; }
+function Y(o) { return o.y; }
+
+function FACE(property) {
+  var f = function (property) {
+    return this[property];
+  }.bind(face, property);
+  f.X = function (offset) {
+    console.log(property, "X got", arguments);
+    if (typeof(offset) === 'undefined') return this().x;
+    return function () { return this().x + offset; }.bind(this);
+  }.bind(f);
+  Object.defineProperty(f, 'x', { get: function () { console.log("getting", property, "x"); return this.X(); }.bind(f) });
+  f.Y = function (offset) {
+    if (typeof(offset) === 'undefined') return this().y;
+    return function () { return this().y + offset; }.bind(this);
+  }.bind(f);
+  Object.defineProperty(f, 'y', { get: function () { return this.Y(); }.bind(f) });
+  return f;
+}
+
+var measures = [
+  [ 'mandwidth',       'go_l', 'go_r' ],
+  [ 'incanthwidth',    'en_l', 'en_r' ],
+  [ 'outcanthwidth',   'ex_l', 'ex_r' ],
+  [ 'morphfaceheight', 'n',    'gn' ],
+  [ 'upfaceheight',    'n',    'sto' ],
+  [ 'nasalwidth',      'al_l', 'al_r' ],
+  [ 'maxcranwidth',    'eu_l', 'eu_r' ],
+  [ 'cranbasewidth',   't_l',  't_r' ],
+/*
+  nasalheight: 94,
+  nasalwidth: 54,
+  subnasalwidth: 40,
+  labfiswidth: 90,
+  upvermheight: 13.5,
+  lowvermheight: 12,
+  philwidth: 16,
+  palpfislength: 28.5,
+*/
+];
+
+var face = {
+  mandwidth: 180,
+  incanthwidth: 64,
+  outcanthwidth: 155,
+  palpfislength: 28.5,
+  morphfaceheight: 188, 
+  upfaceheight: 128.7,
+  nasalheight: 94,
+  nasalwidth: 54,
+  subnasalwidth: 40,
+  labfiswidth: 90,
+  upvermheight: 13.5,
+  lowvermheight: 12,
+  philwidth: 16,
+  maxcranwidth: 240,
+  cranbasewidth: 237,
+
+
+  _cnwidth: 240,
+
+  _cranheight: 152, // distance from nasion to vertex (TODO: make function of maxcranwidth?)
+
+  _upnasalwidth: 46,  // width of nose at height of nasion
+  _midnasalwidth: 30, // width of nose at mid-point of nasalheight
+
+  _cphrise: 2.5, // rise above upvermheight
+
+  _en_y: 18,
+  _ex_y: 21,
+
+  _al_y: 82, // vertical location of al_r/al_l
+
+  // upper point at which ear meets face
+  _upper_ear_y: 14,      
+  _upper_ear_x: 120,
+
+  _helix_vertex_y: 13,      
+  _helix_vertex_x: 126,
+
+  _helix_max_x: 136,
+  _helix_max_y: 30,
+
+  _lobe_y: 95,
+  _lobe_x: 108,
+
+  _t_y: 45, // vertical location of tragion
+
+  _pupil_y: 15.5,
+
+  eye_color: "#A1CAF1",
+  skin_color: "#FFDABE",
+  hair_color: "#E8CEA8"
+};
+
+Object.defineProperty(face, '_ue_r', { get: function () { return P(this._upper_ear_x, this._upper_ear_y); } } );
+Object.defineProperty(face, '_ue_l', { get: function () { return P(- this._upper_ear_x, this._upper_ear_y); } } );
+
+Object.defineProperty(face, '_hv_r', { get: function () { return P(this._helix_vertex_x, this._helix_vertex_y); } } );
+Object.defineProperty(face, '_hv_l', { get: function () { return P(- this._helix_vertex_x, this._helix_vertex_y); } } );
+
+Object.defineProperty(face, '_hm_r', { get: function () { return P(this._helix_max_x, this._helix_max_y); } } );
+Object.defineProperty(face, '_hm_l', { get: function () { return P(- this._helix_max_x, this._helix_max_y); } } );
+
+Object.defineProperty(face, '_lobe_r', { get: function () { return P(this._lobe_x, this._lobe_y); } } );
+Object.defineProperty(face, '_lobe_l', { get: function () { return P(-this._lobe_x, this._lobe_y); } } );
+
+// overall height and width
+Object.defineProperty(face, '_height', { get: function () {  return this.morphfaceheight + this._cranheight; } } );
+Object.defineProperty(face, '_width', { get: function () { return this.maxcranwidth; } } );
+
+Object.defineProperty(face, 'n', { get: function () { return P(0, 0) } }); // nasion defined as origin
+
+Object.defineProperty(face, 'v', { get: function () { return P(0, -this._cranheight) } });
+
+Object.defineProperty(face, '_eu_y', { get: function () { return this.v.y + this.cran_radius; } });
+
+// assume a circular arc running from eu_r to v to eu_l
+Object.defineProperty(face, 'cran_origin', { get: function () { return P(0, this._eu_y); } });
+Object.defineProperty(face, 'cran_radius', { get: function () { return this.maxcranwidth / 2; } });
+
+Object.defineProperty(face, 'eu_r', { get: function () { return P(this.maxcranwidth / 2, this._eu_y) } });
+Object.defineProperty(face, 'eu_l', { get: function () { return P(-this.maxcranwidth / 2, this._eu_y) } });
+
+function PP(origin, radius, angle) { return P(origin.x + radius * Math.cos(angle), origin.y - radius * Math.sin(angle)); }
+
+Object.defineProperty(face, 'cran_control_sr', { get: function () { return PP(this.cran_origin, this.cran_radius, 3 / 8 * Math.PI); } });
+Object.defineProperty(face, 'cran_control_mr', { get: function () { return PP(this.cran_origin, this.cran_radius, 2 / 8 * Math.PI); } });
+Object.defineProperty(face, 'cran_control_ir', { get: function () { return PP(this.cran_origin, this.cran_radius, 1 / 8 * Math.PI); } });
+
+Object.defineProperty(face, 'cran_control_sl', { get: function () { return PP(this.cran_origin, this.cran_radius, 5 / 8 * Math.PI); } });
+Object.defineProperty(face, 'cran_control_ml', { get: function () { return PP(this.cran_origin, this.cran_radius, 6 / 8 * Math.PI); } });
+Object.defineProperty(face, 'cran_control_il', { get: function () { return PP(this.cran_origin, this.cran_radius, 7 / 8 * Math.PI); } });
+
+Object.defineProperty(face, 'jaw_control_sr', { get: function () { return P(this.go_r.x + 10, this.sn.y); } });
+Object.defineProperty(face, 'jaw_control_sl', { get: function () { return P(this.go_l.x - 10, this.sn.y); } });
+
+Object.defineProperty(face, 'jaw_control_ir', { get: function () { return P(this.ch_r.x, this.gn.y); } });
+Object.defineProperty(face, 'jaw_control_il', { get: function () { return P(this.ch_l.x, this.gn.y); } });
+
+Object.defineProperty(face, 'cn_r', { get: function () { return P(this._cnwidth / 2, this.n.y) } }); // cranum@nasion
+Object.defineProperty(face, 'cn_l', { get: function () { return P(-this._cnwidth / 2, this.n.y) } });
+
+
+Object.defineProperty(face, '_go_y', { get: function () { return (this.sto.y + this.li.y) / 2; } });
+Object.defineProperty(face, 'go_r', { get: function () { return P(this.mandwidth / 2, this._go_y) } });
+Object.defineProperty(face, 'go_l', { get: function () { return P(-this.mandwidth / 2, this._go_y) } });
+
+Object.defineProperty(face, 't_r', { get: function () { return P(this.cranbasewidth / 2, this._t_y) } });
+Object.defineProperty(face, 't_l', { get: function () { return P(-this.cranbasewidth / 2, this._t_y) } });
+
+Object.defineProperty(face, 'n_r', { get: function () { return P(this._upnasalwidth / 2, 0) } }); // TODO: this is a made up name
+Object.defineProperty(face, 'n_l', { get: function () { return P(-this._upnasalwidth / 2, 0) } }); // TODO: this is a made up name
+
+Object.defineProperty(face, 'smn_r', { get: function () { return P(this._midnasalwidth / 2, this.nasalheight / 4) } });
+Object.defineProperty(face, 'smn_l', { get: function () { return P(-this._midnasalwidth / 2, this.nasalheight / 4) } });
+Object.defineProperty(face, 'imn_r', { get: function () { return P(this._midnasalwidth / 2, this.nasalheight / 2) } });
+Object.defineProperty(face, 'imn_l', { get: function () { return P(-this._midnasalwidth / 2, this.nasalheight / 2) } });
+
+Object.defineProperty(face, 'sn', { get: function () { return P(0, this.nasalheight) } });
+
+Object.defineProperty(face, 'al_r', { get: function () { return P(this.nasalwidth / 2, this._al_y) } });
+Object.defineProperty(face, 'al_l', { get: function () { return P(-this.nasalwidth / 2, this._al_y) } });
+Object.defineProperty(face, 'sbal_r', { get: function () { return P(this.subnasalwidth / 2, this.sn.y) } });
+Object.defineProperty(face, 'sbal_l', { get: function () { return P(-this.subnasalwidth / 2, this.sn.y) } });
+
+Object.defineProperty(face, 'en_r', { get: function () { return P(this.incanthwidth / 2, this._en_y) } });
+Object.defineProperty(face, 'ex_r', { get: function () { return P(this.outcanthwidth / 2, this._ex_y) } });
+Object.defineProperty(face, 'en_l', { get: function () { return P(- this.incanthwidth / 2, this._en_y) } });
+Object.defineProperty(face, 'ex_l', { get: function () { return P(- this.outcanthwidth / 2, this._ex_y) } });
+
+Object.defineProperty(face, 'sto', { get: function () { return P(0, this.upfaceheight) } });
+Object.defineProperty(face, 'ls', { get: function () { return P(this.sto.x, this.sto.y - this.upvermheight); } });
+Object.defineProperty(face, 'li', { get: function () { return P(this.sto.x, this.sto.y + this.lowvermheight); } });
+Object.defineProperty(face, 'cph_r', { get: function () { return P(this.philwidth / 2, this.ls.y - this._cphrise); } }); // TODO: offset
+Object.defineProperty(face, 'cph_l', { get: function () { return P(- this.philwidth / 2, this.ls.y - this._cphrise); } });
+Object.defineProperty(face, 'ch_r', { get: function () { return P(this.labfiswidth / 2, this.upfaceheight - 2) } }); // TODO: offset
+Object.defineProperty(face, 'ch_l', { get: function () { return P(- this.labfiswidth / 2, this.upfaceheight - 2) } });
+
+
+Object.defineProperty(face, 'verm_control_i_r', { get: function () { return P((this.li.x + this.li.x + this.ch_r.x) / 3, this.li.y); } });
+Object.defineProperty(face, 'verm_control_i_l', { get: function () { return P((this.li.x + this.li.x + this.ch_l.x) / 3, this.li.y); } });
+Object.defineProperty(face, 'verm_control_s_r', { get: function () { return this.ch_r; } });
+Object.defineProperty(face, 'verm_control_s_l', { get: function () { return this.ch_l; } });
+
+Object.defineProperty(face, 'gn', { get: function () { return P(0, this.morphfaceheight); } });
+
+Object.defineProperty(face, 'pupil_r', { get: function () {
+    return P((this.en_r.x + this.ex_r.x) / 2, this._pupil_y);
+} });
+
+Object.defineProperty(face, 'pupil_l', { get: function () {
+    return P((this.en_l.x + this.ex_l.x) / 2, this._pupil_y);
+} });
+
+Object.defineProperty(face, '_eyeradius', { get: function () { return (this.outcanthwidth - this.incanthwidth) / 4; } });
+Object.defineProperty(face, '_irisradius', { get: function () { return 9; } }); // TODO
+Object.defineProperty(face, '_pupilradius', { get: function () { return 4; } }); // TODO
+
+Object.defineProperty(face, 'lid_control_sn_r', { get: function () {
+    return P(this.pupil_r.x - 10,  this.pupil_r.y - 5);
+} });
+
+Object.defineProperty(face, 'lid_control_sx_r', { get: function () {
+    return P(this.pupil_r.x + 12,  this.pupil_r.y - 8);
+} });
+
+Object.defineProperty(face, 'lid_control_ix_r', { get: function () {
+    return P(this.pupil_r.x + 8,  32);
+} });
+
+Object.defineProperty(face, 'lid_control_in_r', { get: function () {
+    return P(this.pupil_r.x - 10,  22);
+} });
+
+Object.defineProperty(face, 'lid_control_sn_l', { get: function () {
+    return P(this.pupil_l.x + 10,  this.pupil_l.y - 5);
+} });
+
+Object.defineProperty(face, 'lid_control_sx_l', { get: function () {
+    return P(this.pupil_l.x - 12,  this.pupil_l.y - 8);
+} });
+
+Object.defineProperty(face, 'lid_control_ix_l', { get: function () {
+    return P(this.pupil_l.x - 8,  32);
+} });
+
+Object.defineProperty(face, 'lid_control_in_l', { get: function () {
+    return P(this.pupil_l.x + 10,  22);
+} });
+
+function eyeball(face, side) {
+  var c = face[['pupil', side].join('_')];
+  var set = ['eye', side].join('-');
+  return [
+    { clip: true, set: set, "c": c, "r": face._eyeradius, "fill" : "white" },       // sclera
+    { clip: true, set: set, "c": c, "r": face._irisradius, "fill" : face.eye_color },   // iris
+    { clip: true, set: set, "c": c, "r": face._pupilradius, "fill" : "black" }          // pupil
+  ];
+}
+
+function crosshairs(g, p, r, color, id) {
+  if (typeof(color) == "undefined" && typeof(r) == "string") { color = r; r = undefined; }
+  color = color || "orange";
+  r = r || 10;
+  json.crosshairs.push({ id: id, r: r, color: color });
+};
+
+function draw_crosshairs() {
+  console.log("draw crosshairs");
+  faceg.selectAll('line.vertical').data(json.crosshairs).enter().append("line").attr({
+        "class": "vertical",
+        "x1": function (data) { return face[data.id].x },
+        "y1": function (data) { return face[data.id].y - data.r },
+        "x2": function (data) { return face[data.id].x },
+        "y2": function (data) { return face[data.id].y + data.r },
+        "stroke-width": 1,
+        "stroke": function (data) { return data.color; }
+      });
+  faceg.selectAll('line.horizontal').data(json.crosshairs).enter().append("line").attr({
+        "class": "horizontal",
+        "x1": function (data) { return face[data.id].x - data.r },
+        "y1": function (data) { return face[data.id].y },
+        "x2": function (data) { return face[data.id].x + data.r },
+        "y2": function (data) { return face[data.id].y },
+        "stroke-width": 1,
+        "stroke": function (data) { return data.color; }
+      }) ;
+  faceg.selectAll("text").data(json.crosshairs).enter().append("text").text(function (data) { console.log("text"); return data.id; }).attr({
+        "x": function (data) { return face[data.id].x + 2 },
+        "y": function (data) { return face[data.id].y + 2 },
+        "fill": function (data) { return data.color; },
+        "text-anchor": function (data) { var p = face[data.id]; return p.x > 0 ? "start" : "end"; },
+        "alignment-baseline": function (data) { var p = face[data.id]; return p.y > 0 ? "text-before-edge" : "auto"; }
+      });
+}
+
+function redraw_crosshairs() {
+  faceg.selectAll('line.vertical').attr({
+      "x1": function (data) { return face[data.id].x },
+      "y1": function (data) { return face[data.id].y - data.r },
+      "x2": function (data) { return face[data.id].x },
+      "y2": function (data) { return face[data.id].y + data.r }
+    });
+  faceg.selectAll('line.horizontal').attr({
+      "x1": function (data) { return face[data.id].x - data.r },
+      "y1": function (data) { return face[data.id].y },
+      "x2": function (data) { return face[data.id].x + data.r },
+      "y2": function (data) { return face[data.id].y },
+    });
+  faceg.selectAll("text").attr({
+        "x": function (data) { return face[data.id].x + 2 },
+        "y": function (data) { return face[data.id].y + 2 },
+      });
+}
+
+var json = {
+  "circles": [
+  ],
+  "crosshairs": [
+  ],
+};
+
+Array.prototype.push.apply(json.circles, eyeball(face, 'l'));
+Array.prototype.push.apply(json.circles, eyeball(face, 'r'));
+
+
+console.log(json);
+
+var svg = d3.select("#canvas").append("svg")
+                              .attr("width", 275)
+                              .attr("height", 363);
+
+var translate_x = 138;
+var translate_y = 155;
+console.log(translate_x, translate_y);
+
+svg.on('mousemove', function () {
+  json.circles = json.circles.map(function (circle) {
+     circle.c.x += Math.random() * 5;
+  });
+});
+
+svg.on('mousemove', function () {
+
+  function pct(v) { return Math.round(v * 1000) / 10; }
+
+  var raw_coords = d3.mouse(this);
+  var face_coords = [raw_coords[0] - translate_x, raw_coords[1] - translate_y].map(Math.round);
+
+  document.forms.coords.raw_x.value = raw_coords[0];
+  document.forms.coords.raw_y.value = raw_coords[1];
+  document.forms.coords.face_x.value = face_coords[0];
+  document.forms.coords.face_y.value = face_coords[1];
+});
+
+var faceg = svg.append("g").attr("id", "face");
+
+var right_eye = [
+  'en_r',
+  'lid_control_sn_r',
+  'lid_control_sx_r',
+  'ex_r',
+  'ex_r',
+  'lid_control_ix_r',
+  'lid_control_in_r',
+  'en_r'
+].map(FACE);
+
+var left_eye = [
+  'en_l',
+  'lid_control_sn_l',
+  'lid_control_sx_l',
+  'ex_l',
+  'ex_l',
+  'lid_control_ix_l',
+  'lid_control_in_l',
+  'en_l'
+].map(FACE);
+
+var left_nose = [ 'n_l', 'smn_l', 'imn_l', 'al_l', 'sbal_l' ].map(FACE);
+var right_nose = [ 'n_r', 'smn_r', 'imn_r', 'al_r', 'sbal_r' ].map(FACE);
+
+var skull = [
+  'v',
+  'cran_control_sr',
+  'cran_control_mr',
+  'cran_control_ir',
+  'eu_r', 'eu_r',
+  't_r',
+  'jaw_control_sr',
+  'go_r', 'go_r',
+  'jaw_control_ir',
+  'gn',
+  'jaw_control_il',
+  'go_l', 'go_l',
+  'jaw_control_sl',
+  't_l',
+  'cn_l',
+  'eu_l',
+  'cran_control_il', 'cran_control_ml', 'cran_control_sl',
+];
+
+var vermillion = [
+  'ch_l',
+  'verm_control_s_l',
+  'cph_l',
+  'cph_l',
+  'ls',
+  'cph_r',
+  'cph_r',
+  'ch_r',
+  'ch_r',
+  'verm_control_i_r',
+  'li',
+  'li',
+  'verm_control_i_l',
+  'ch_l'
+].map(FACE);
+
+var fissure = [
+  'ch_l',
+  'sto',
+  'ch_r'
+].map(FACE);
+
+var left_ear = [ '_ue_l', '_hv_l', '_hm_l', '_lobe_l' ];
+var right_ear = [ '_ue_r', '_hv_r', '_hm_r', '_lobe_r' ];
+
+var basis = d3.svg.line().x(X).y(Y).interpolate("basis");
+var basisClosed = d3.svg.line().x(X).y(Y).interpolate("basis-closed");
+var cardinal = d3.svg.line().x(X).y(Y).interpolate("cardinal");
+var cardinalClosed = d3.svg.line().x(X).y(Y).interpolate("cardinal-closed");
+
+function draw_path(svg, func, data, stroke) {
+  return faceg.append("path")
+    .attr("d", func(data))
+    .attr("stroke-width", 2)
+    .attr("stroke", stroke)
+    .attr("fill", "none");
+}
+
+var skullg = draw_path(svg, basisClosed, skull.map(FACE), "green").attr({ "fill": face.skin_color, "stroke": "black" });
+
+draw_path(svg, basis, left_ear.map(FACE), "purple");
+draw_path(svg, basis, right_ear.map(FACE), "purple");
+
+draw_path(svg, cardinal, right_nose, "black").attr("class", "outline");
+draw_path(svg, cardinal, left_nose, "black").attr("class", "outline");
+
+draw_path(svg, basisClosed, vermillion, "none").attr("fill", "red");
+draw_path(svg, basis, fissure, "black");
+
+/*
+faceg.append("svg:clipPath").attr("id", "clipper")
+    .append("svg:rect")
+    .attr('id', 'clip-rect');
+
+var eyebulb = faceg.append("svg:g").attr("class", "container");
+*/
+
+faceg.selectAll("circle")
+  .data(json.circles)
+  .enter()
+    .append("circle")
+      .attr("cx",    function (d) { return d.c.x; })
+      .attr("cy",    function (d) { return d.c.y; })
+      .attr("r",     function (d) { return d.r; })
+      .style("fill", function (d) { return d.fill; })
+      .attr("clip-path", function (d) { return d.clip && 'url(#clip-' + d.set + ')' || null; })
+;
+
+
+// [ 'en_r', 'ex_r' ].forEach(function (m) { crosshairs(faceg, FACE(m), 10, "blue", m); });
+[ 'en_l', 'ex_l' ].forEach(function (m) { crosshairs(faceg, FACE(m), 10, "blue", m); });
+[ 
+  'lid_control_sn_l',
+  'lid_control_sx_l',
+  'lid_control_ix_l',
+  'lid_control_in_l'
+].forEach(function (m) { crosshairs(svg, FACE(m), 5, "purple", m); });
+
+[ 'pupil_r', 'pupil_l' ].forEach(function (m) {
+  crosshairs(faceg, FACE(m), 10, "lightblue", m);
+});
+
+left_ear.forEach(function (m) { crosshairs(faceg, FACE(m), 10, "red", m); });
+right_ear.forEach(function (m) { crosshairs(faceg, FACE(m), 10, "red", m); });
+
+
+[ 'n', 'sn', 'cran_origin' ].forEach(function (m) { crosshairs(faceg, FACE(m), 10, "purple", m); });
+skull.forEach(function (m) { crosshairs(faceg, FACE(m), 10, "green", m); });
+
+[ 't_r', 't_l' ].forEach(function (m) { crosshairs(faceg, FACE(m), 10, "lightgreen", m); });
+// [ 'n_r', 'n_l', 'smn_l', 'smn_r', 'imn_r', 'imn_l', 'al_r', 'al_l', 'sbal_r', 'sbal_l' ].forEach(function (m) { crosshairs(faceg, FACE(m), 5, "orange", m); });
+
+[ 'sto', 'ls', 'li', 'cph_r', 'cph_l', 'ch_l', 'ch_r' ].forEach(function (m) { crosshairs(faceg, FACE(m), 5, "red", m); });
+
+var measuresg = faceg.append('g').attr("id", 'measures');
+
+console.log(measures);
+
+var m = d3.select('#measures').selectAll('g.measure')
+          .data(measures)
+            .enter()
+            .append("g")
+              .attr("id", function (data) { return ['m', data[0]].join('-'); })
+              .attr("class", function (data) { return ['measure', data[0]].join(' '); });
+
+var ml = m.selectAll("line")
+              .data(function (d, i) { return [{ p1: face[d[1]], p2: face[d[2]] }]; })
+              .enter().append("line")
+                .attr("x1", function (data) { console.log("x1", data); return data.p1.x; })
+                .attr("y1", function (data) { console.log("y1", data); return data.p1.y; })
+                .attr("x2", function (data) { console.log("x2", data); return data.p2.x; })
+                .attr("y2", function (data) { console.log("y2", data); return data.p2.y; });
+
+var mc = m.selectAll("circle")
+              .data(function (d, i) { return [ { i: d[1], m: d[0], p: face[d[1]] }, { i: d[2], m: d[0], p: face[d[2]] } ]; }) 
+              .enter().append("circle")
+                .attr("id", function (data) { return ['c', data.m, data.i].join('-'); })
+                .attr("cx", function (data) { return data.p.x; })
+                .attr("cy", function (data) { return data.p.y; })
+                .attr("r", 5)
+                .on("click", handleClick);
+
+  function handleClick() { 
+    console.log("handleClick", $(this).attr('id'), $(this.parentNode).attr('id'));
+    d3.select(".selected").classed('selected', false);
+    d3.select(".active").classed('active', false);
+    d3.select(this.parentNode).classed('selected', true);
+    d3.select(this).classed('active', true);
+
+    var lid =  $(this.parentNode).attr('id').replace(/^m-/, 'l-');
+    $('label.measure').removeClass('active');
+    $('#' + lid).addClass('active');
+  }
+
+
+measures.forEach(function (ma) {
+    var measure = ma[0];
+    var c = $('<input/>', { type: 'checkbox', name: measure, checked: true });
+    c.change(function () {
+      d3.select('#m-' + $(this).attr('name')).style('visibility', $(this).is(':checked') ? 'visible' : 'hidden');
+    });
+    $('#coords').append(c);
+    var lid = ['l', measure].join('-');
+    var l = $('#coords').append($('<label/>', { class: "measure", id: lid, for: measure, "rv-text": 'text < face measure' }));
+
+    rivets.bind($('#' + lid), { text: function () { return measure + " ("  + face[measure] + ")"; }, measure: measure, face: face });
+});
+
+faceg.attr('transform', 'translate(' + [translate_x, translate_y].join() + ')');
+
+var change = 20;
+// draw_crosshairs();
+/*
+setTimeout(function () {
+  face.mandwidth += change; change = change * -1;
+  // console.log(JSON.stringify(json.crosshairs));
+  redraw_crosshairs();
+  skullg.attr('d', basisClosed(skull.map(FACE)));
+  console.log(face.mandwidth);
+  }, 500);
+*/
+
+var defs = svg.append("defs");
+
+defs.append("clipPath")
+    .attr("id", "clip-eye-l")
+    .append("path")
+    .attr("d", basis(left_eye))
+    ;
+
+defs.append("clipPath")
+    .attr("id", "clip-eye-r")
+    .append("path")
+    .attr("d", basis(right_eye))
+    ;
+
+defs.append("marker")
+ .attr("id", "markerCircle")
+ .attr("viewBox", "-20 -20 20 20")
+ .attr("refX", "0")
+ .attr("refY", "0")
+ .append("circle")
+      .attr("cx", "0")
+      .attr("cy", "0")
+      .attr("r", "20");
+
+defs.append("marker")
+ .attr("id", "StartMarker")
+ .attr("viewBox", "0 0 12 12")
+ .attr("refX", "12")
+ .attr("refY", "6")
+ .attr("markerWidth", "3")
+ .attr("markerHeight", "3")
+ .attr("orient", "auto")
+ .append("circle")
+      .attr("cx", "6")
+      .attr("cy", "6")
+      .attr("r", "5");
+
+// document.getElementById("json").value = JSON.stringify(json, null, '  ');
+
+// ]]>
+</script>
+  </body>
+</html>

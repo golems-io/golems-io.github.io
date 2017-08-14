@@ -1,0 +1,78 @@
+<!doctype html>
+<html>
+  <head>
+    <title></title>
+    <script type="text/javascript" src="https://code.jquery.com/jquery-2.1.3.min.js"></script>
+    <style>
+h1 { font-size: 72px; font-weight: 700; display: inline-block; background: #F9F9F9; border-radius: 10px; padding: .25em; margin: .5em; }
+a { font-family: sans-serif; display: block; font-size: small; float: right; color: inherit; text-decoration: none; margin-left: -5em; font-weight: normal; }
+h1 a { visibility: hidden; }
+h1:hover a { visibility: visible; }
+p { display: inline-block; margin: .125em; }
+    </style>
+  </head>
+  <body>
+<script>
+$(document).ready(function () {
+
+    function c(x) { return Math.floor(Math.random() * (x || 128)); }
+    function rrgb() { return "rgb(" + [c(), c(), c()].join(', ') + ")"; }
+
+    [
+      "Port Lligat Sans",
+      "Port Lligat Slab",
+      "Podkova",
+//      "Laila",
+//      "Bigelow Rules", // cool and whimsical but hard to read
+//      "Overlock",
+      "Alegreya",
+      "Bitter",
+      'Yanone Kaffeesatz',
+      'Cabin Sketch',
+//      "Volkhov",
+//      "Berkshire Swash",
+//      "Noto Serif",
+//      "Patrick Hand",
+//      "Dekko",
+//      "Averia Serif Libre",
+    ].forEach(function (font) {
+     $('head').append($('<link/>', {
+       rel: "stylesheet",
+       type: "text/css",
+       href: "http://fonts.googleapis.com/css?family=" + encodeURIComponent(font) + ":400,700" + "&text=golems.io"
+     }));
+     var rgb = rrgb();
+     $('body').append($('<h1/>', {
+         text: 'golems.io',
+         style: 'font-family: "' + font + '", fixed; color: ' + rgb + ';',
+         click: function () {
+           if (Math.random() > 0.5) {
+             $(this).css({ "color": rrgb(), "background-color": '#F9F9F9' });
+           } else {
+             $(this).css({ "background-color": rrgb(), "color": 'white' });
+           }
+         }
+       }).append($('<a/>', {
+          text: font,
+          target: "_blank",
+          href: "http://www.google.com/fonts/specimen/" + encodeURIComponent(font)
+        }))
+     );
+     $('body').append($('<p/>', {
+       text: 'g',
+       style: 'font-family: "' + font + '"; background-color: ' + rgb + '; font-size: 80px; width: 1.5em; height: 1.5em; line-height: 1.25em; border-radius: 50%; border: solid 3px ' + rgb + '; color: ' + "white" + '; text-align: center;',
+       click: function () {
+         var rgb = rrgb();
+         if (Math.random() > 0.5) {
+           $(this).css({ "color": rgb, "background-color": 'white', "border-color": rgb });
+         } else {
+           $(this).css({ "background-color": rgb, "color": 'white', "border-color": rgb });
+         }
+       }
+     }));
+  });
+});
+</script>
+
+  </body>
+</html>

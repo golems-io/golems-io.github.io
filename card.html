@@ -1,0 +1,11 @@
+<table>
+   <tbody>
+    <tr ng-repeat="(key, value) in golem">
+      <th>{{ key | title }}</th>
+      <td>{{ value }}</td>
+    </tr>
+  </tbody>
+</table>
+<pre ng-show="debug">
+{{ golem | json }}
+</pre>

@@ -1,0 +1,41 @@
+<!doctype html>
+<html ng-app="golems">
+  <head>
+    <title>golems.io</title>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.1/jquery.min.js"></script>
+
+    <link href="//netdna.bootstrapcdn.com/twitter-bootstrap/2.3.2/css/bootstrap-combined.no-icons.min.css" rel="stylesheet">
+    <link href="//netdna.bootstrapcdn.com/font-awesome/4.0.0/css/font-awesome.css" rel="stylesheet">
+    <script src="//netdna.bootstrapcdn.com/twitter-bootstrap/2.3.2/js/bootstrap.min.js"></script>
+
+    <script src="//ajax.googleapis.com/ajax/libs/angularjs/1.0.8/angular.min.js"></script>
+    <script src="//ajax.googleapis.com/ajax/libs/angularjs/1.0.8/angular-resource.min.js"></script>
+    <script src="//ajax.googleapis.com/ajax/libs/angularjs/1.0.8/angular-sanitize.min.js"></script>
+    <script src="//ajax.googleapis.com/ajax/libs/angularjs/1.0.8/angular-cookies.min.js"></script>
+
+    <script src="//cdnjs.cloudflare.com/ajax/libs/moment.js/2.2.1/moment.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/raphael/2.1.2/raphael-min.js"></script>
+
+    <script src="ng-csv.min.js"></script>
+
+    <script src="golems-resource.js"></script>
+    <script src="golems-app.js"></script>
+
+    <style type="text/css">
+      tr > th:first-child { text-transform: capitalize; text-align: right; padding-right: .5em; }
+      .container-fluid table.table-not-fluid { width: auto; }
+      table a { white-space: nowrap; }
+      h3 a.btn { float: right; }
+      td.flag i { font-size: larger; }
+      td.flag i.true { color: green; }
+      td.flag i.false { color: darkred; }
+      td.flag i.null { color: gray; }
+    </style>
+  </head>
+  <body>
+    <div class="container-fluid">
+      <h2><a href="#/">golems.io</a></h2>
+      <div class="well" ng-view></div>
+    </div>
+  </body>
+</html>

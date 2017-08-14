@@ -1,0 +1,71 @@
+<h3>
+  Device {{ device.snid }}
+  <span ng-show="!device.account">(not paired)</span>
+</h3>
+<table class="table table-not-fluid">
+  <tbody>
+    <tr ng-show="device.account">
+      <th>Paired Account</th>
+      <td colspan="3"><a href="#/accounts/view/{{ device.account }}">{{ device.account }}</a></td>
+    </tr>
+    <tr>
+      <th>Updated</th>
+      <td>{{ device.updated | fromNow }}</td>
+      <td>{{ device.updated }}</td>
+      <td class="flag">
+        <i ng-show="active == true" class="fa fa-check true"></i>
+        <i ng-show="active == false" class="fa fa-times false"></i>
+        <i ng-show="active == null" class="fa fa-question null"></i>
+      </td>
+    </tr>
+    <tr ng-show="device.location">
+        <th rowspan="2">Location</th>
+        <th>Floor</th>
+        <th>Room</th>
+        <th>Appliance</th>
+    </tr>
+    <tr ng-show="device.location">
+        <td>{{ device.location.floor }}</td>
+        <td>{{ device.location.room }}</td>
+        <td>{{ device.location.appliance }}</td>
+    </tr>
+    <tr>
+      <th>Alarmed</th>
+      <td colspan="3">{{ device.alarmed }}</td>
+    </tr>
+    <tr ng-show="reservation">
+      <th>Reservation</th>
+      <td colspan="3">{{ reservation.type }}/{{ reservation.name }}</td>
+    <tr ng-show="reservation">
+      <th>Message Spec</td>
+      <td colspan="3">{{ reservation.messageSpec }}</td>
+    </tr>
+  </tbody>
+</table>
+<h3>Last {{ events.length }} Events</h3>
+<table class="table table-condensed table-striped table-not-fluid">
+  <thead>
+    <tr>
+      <th colspan="2">Time</th>
+      <th>gateway</th>
+      <th>Event Type</th>
+      <th>Payload</th>
+      <th>IP Address</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr ng-repeat="event in events | orderBy:'-time'">
+      <td>{{ event.time | fromNow }}</td>
+      <td>{{ event.time }}</td>
+      <td><a href="#/gateways/view/{{ event.gateway }}">{{ event.gateway }}</a></td>
+      <td>{{ event.type }}</td>
+      <td>{{ event.payload | json }}</td>
+      <td>{{ event.remote }}</td>
+    </tr>
+  </tbody>
+</table>
+<pre ng-show="debug">
+reservation {{ reservation | json }}
+active {{ active | json }}
+devices {{ device | json }}
+</pre>
