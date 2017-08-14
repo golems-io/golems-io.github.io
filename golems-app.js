@@ -32,7 +32,7 @@ angular.module('golems', ['api', 'ngCsv', 'ngCookies']).
     delete $httpProvider.defaults.headers.common['X-Requested-With']; // borks CORS 
   });
 
-function Card($scope, $location, Person) {
+function Card($scope, $location, Schema, Person) {
   $scope.debug = true; // "debug" in $location.search();
   $scope.schema = Schema.get({ aspect: "person" });
   $scope.golem = Person.get({ spore: "random" });
