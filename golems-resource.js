@@ -1,6 +1,7 @@
 angular.module('api', ['ngResource'])
   .factory('Person', function($resource) {
-      var Person = $resource('//api.golems.io/person/:spore');
+      // TODO: switch to api.golems.io if/when can enable SNI SSL on heroku (requires paid dynos) or switch to lambda or whatever
+      var Person = $resource('//golems.herokuapp.com/person/:spore');
       return Person;
     })
 ;
